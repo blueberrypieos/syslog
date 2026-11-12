@@ -1,3 +1,9 @@
+syslog (406+ds1-2) blueberry-pie-os; urgency=medium
+
+  * syslogd has Priority important. The base system starts it.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Thu, 12 Nov 2026 22:32:35 +0000
+
 syslog (406+ds1-1) blueberry-pie-os; urgency=medium
 
   * syslog 406.
