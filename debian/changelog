@@ -1,0 +1,7 @@
+syslog (406+ds1-1) blueberry-pie-os; urgency=medium
+
+  * syslog 406.
+  * Mark XPC_TYPE_FD values in messages as {XPC_TYPE_FD}.
+    This needs libxpc 0-2.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Tue, 10 Nov 2026 03:17:56 +0000

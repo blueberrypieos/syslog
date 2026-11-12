@@ -1,0 +1,60 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 The Blueberry Pie OS Authors
+
+include /usr/share/pietoolchain/rules.mk
+
+SHELL := /bin/bash
+
+TOOLS := syslogd syslog aslmanager
+COMMON := aslcommon/asl_common.c
+NOTICE := $(OBJ)/apsl-notice
+MIGDIR := $(OBJ)/mig
+TOOLS_CFLAGS := -I$(SRCROOT)/aslcommon -I$(MIGDIR) \
+	-isystem $(SDK)/System/Library/Frameworks/System.framework/PrivateHeaders
+TOOLS_LDFLAGS := -Wl,-sectcreate,__TEXT,__source,$(NOTICE)
+
+syslogd_SRCS := syslogd.tproj/syslogd.c syslogd.tproj/daemon.c syslogd.tproj/dbserver.c \
+	syslogd.tproj/asl_action.c syslogd.tproj/bsd_out.c syslogd.tproj/klog_in.c \
+	syslogd.tproj/remote.c aslcommon/asl_memory.c $(COMMON) debian/pie_runtime.c
+syslogd_FLAGS := -I$(SRCROOT)/syslogd.tproj -I$(SRCROOT)/debian
+syslogd_LIBS := -lbsm
+syslogd_DIR := usr/sbin
+
+syslog_SRCS := util.tproj/syslog.c $(COMMON)
+syslog_DIR := usr/bin
+
+aslmanager_SRCS := aslmanager.tproj/aslmanager.c aslmanager.tproj/daemon.c $(COMMON)
+aslmanager_LIBS := -lz
+aslmanager_DIR := usr/sbin
+
+include $(PIETOOLCHAIN)/tools.mk
+
+$(MIGDIR)/.generated: $(SRCROOT)/aslcommon/asl_ipc.defs
+	mkdir -p $(MIGDIR)
+	cd $(MIGDIR) && set -o pipefail && $(CC) $(BASE_CFLAGS) -E -x c $(SRCROOT)/aslcommon/asl_ipc.defs | \
+		$(TOOLCHAIN)/prefix/libexec/migcom -header asl_ipc.h -sheader asl_ipcServer.h \
+		-user asl_ipcUser.c -server asl_ipcServer.c
+	touch $@
+
+$(MIGDIR)/%.o: $(MIGDIR)/.generated
+	$(CC) $(BASE_CFLAGS) -c $(MIGDIR)/$*.c -o $@
+
+$(syslogd_OBJS) $(syslog_OBJS) $(aslmanager_OBJS): | $(MIGDIR)/.generated
+$(OBJ)/bin/syslogd: $(MIGDIR)/asl_ipcServer.o
+$(OBJ)/bin/syslog: $(MIGDIR)/asl_ipcUser.o
+
+$(NOTICE):
+	mkdir -p $(OBJ)
+	printf '%s\n' 'This program contains Covered Code under the Apple Public Source License 2.0.' \
+		'Its Source Code is available under that License from https://github.com/blueberrypieos/syslog.' > $@
+$(TOOL_BINS): | $(NOTICE)
+
+all: $(TOOL_BINS)
+
+install: install-tools
+	install -d $(ROOT)/etc $(ROOT)/var/log/asl $(ROOT)/var/run
+	install -m 644 $(SRCROOT)/debian/asl.conf $(ROOT)/etc/asl.conf
+	install -m 644 $(SRCROOT)/debian/syslog.conf $(ROOT)/etc/syslog.conf
+
+.PHONY: all install

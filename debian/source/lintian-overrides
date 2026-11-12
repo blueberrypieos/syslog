@@ -1,0 +1,4 @@
+superfluous-file-pattern debian/build/obj/mig/asl_ipc.h [debian/copyright:*]
+superfluous-file-pattern debian/build/obj/mig/asl_ipcServer.h [debian/copyright:*]
+superfluous-file-pattern debian/build/obj/mig/asl_ipcUser.c [debian/copyright:*]
+superfluous-file-pattern debian/build/obj/mig/asl_ipcServer.c [debian/copyright:*]

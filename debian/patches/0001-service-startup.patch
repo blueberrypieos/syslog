@@ -1,0 +1,206 @@
+Description: Use PIE startup and local services
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-10
+
+--- a/syslogd.tproj/syslogd.c
++++ b/syslogd.tproj/syslogd.c
+@@ -19,6 +19,24 @@
+  * limitations under the License.
+  * 
+  * @APPLE_LICENSE_HEADER_END@
++ */
++/* Modified 2026-11-10: Use PIE service check-in and startup (APSL 2.0 section 2.2(b)). */
++/*
++ * This file contains Original Code and/or Modifications of Original Code
++ * as defined in and that are subject to the Apple Public Source License
++ * Version 2.0 (the 'License'). You may not use this file except in
++ * compliance with the License. Please obtain a copy of the License at
++ * http://www.opensource.apple.com/apsl/ and read it before using this
++ * file.
++ * 
++ * The Original Code and all software distributed under the License are
++ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
++ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
++ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
++ * Please see the License for the specific language governing rights and
++ * limitations under the License.
++ *
+  */
+ 
+ #include <TargetConditionals.h>
+@@ -50,9 +68,7 @@
+ #include <utmpx.h>
+ #include <asl_private.h>
+ 
+-#if !TARGET_OS_IPHONE
+-#include <quarantine.h>
+-#endif
++#include "pie_runtime.h"
+ #include "daemon.h"
+ 
+ #define SERVICE_NAME "com.apple.system.logger"
+@@ -84,16 +100,11 @@
+ #endif
+ 
+ #if !TARGET_OS_SIMULATOR
+-int udp_in_init(void);
+-int udp_in_reset(void);
+-int udp_in_close(void);
+-static int activate_udp_in = 1;
+-
+ /* Output Modules */
+ int bsd_out_init(void);
+ int bsd_out_reset(void);
+ int bsd_out_close(void);
+-static int activate_bsd_out = 1;
++static int activate_bsd_out = 0;
+ #endif
+ 
+ int asl_action_init(void);
+@@ -115,7 +126,7 @@
+ init_modules()
+ {
+ #if !TARGET_OS_SIMULATOR
+-	module_t *m_klog_in, *m_bsd_out, *m_udp_in, *m_remote;
++	module_t *m_klog_in, *m_bsd_out, *m_remote;
+ #endif
+ 	module_t *m_asl;
+ 	int m = 0;
+@@ -175,22 +186,6 @@
+ #endif
+ 
+ #if !TARGET_OS_SIMULATOR
+-	/* network (syslog protocol) input module */
+-	m_udp_in = (module_t *)calloc(1, sizeof(module_t));
+-	if (m_udp_in == NULL)
+-	{
+-		asldebug("alloc failed (init_modules udp_in)\n");
+-		exit(1);
+-	}
+-
+-	m_udp_in->name = "udp_in";
+-	m_udp_in->enabled = activate_udp_in;
+-	m_udp_in->init = udp_in_init;
+-	m_udp_in->reset = udp_in_reset;
+-	m_udp_in->close = udp_in_close;
+-
+-	if (m_udp_in->enabled) m_udp_in->init();
+-
+ 	/* remote (iOS support) module */
+ 	m_remote = (module_t *)calloc(1, sizeof(module_t));
+ 	if (m_remote == NULL)
+@@ -212,7 +207,7 @@
+ #if TARGET_OS_SIMULATOR
+ 	global.module_count = 1;
+ #else
+-	global.module_count = 5;
++	global.module_count = 4;
+ #endif
+ 	global.module = (module_t **)calloc(global.module_count, sizeof(module_t *));
+ 	if (global.module == NULL)
+@@ -225,7 +220,6 @@
+ #if !TARGET_OS_SIMULATOR
+ 	global.module[m++] = m_bsd_out;
+ 	global.module[m++] = m_klog_in;
+-	global.module[m++] = m_udp_in;
+ 	global.module[m++] = m_remote;
+ #endif
+ }
+@@ -257,34 +251,14 @@
+ void
+ launch_config()
+ {
+-	launch_data_t tmp, pdict;
+ 	kern_return_t status;
+ 
+-	tmp = launch_data_new_string(LAUNCH_KEY_CHECKIN);
+-	global.launch_dict = launch_msg(tmp);
+-	launch_data_free(tmp);
+-
+-	if (global.launch_dict == NULL)
+-	{
+-		asldebug("%d launchd checkin failed\n", global.pid);
+-		exit(1);
+-	}
+-
+-	tmp = launch_data_dict_lookup(global.launch_dict, LAUNCH_JOBKEY_MACHSERVICES);
+-	if (tmp == NULL)
+-	{
+-		asldebug("%d launchd lookup of LAUNCH_JOBKEY_MACHSERVICES failed\n", global.pid);
+-		exit(1);
+-	}
+-
+-	pdict = launch_data_dict_lookup(tmp, SERVICE_NAME);
+-	if (pdict == NULL)
+-	{
+-		asldebug("%d launchd lookup of SERVICE_NAME failed\n", global.pid);
+-		exit(1);
+-	}
+-
+-	global.server_port = launch_data_get_machport(pdict);
++	status = bootstrap_check_in(bootstrap_port, SERVICE_NAME, &global.server_port);
++	if (status != KERN_SUCCESS)
++	{
++		asldebug("service check-in failed: %d\n", status);
++		exit(1);
++	}
+ 
+ 	/* port for receiving MACH_NOTIFY_DEAD_NAME notifications */
+ 	status = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &(global.dead_session_port));
+@@ -459,17 +433,12 @@
+ 	}
+ #endif
+ 
++	pie_start(argc, argv);
++
+ 	/* Set I/O policy */
+ 	setiopolicy_np(IOPOL_TYPE_DISK, IOPOL_SCOPE_PROCESS, IOPOL_PASSIVE);
+ 
+-#if !TARGET_OS_IPHONE
+-	/* Set Quarantine */
+-	qtn_proc_t qp = qtn_proc_alloc();
+-	qtn_proc_set_identifier(qp, "com.apple.syslogd");
+-	qtn_proc_set_flags(qp, QTN_FLAG_SANDBOX | QTN_FLAG_HARD);
+-	qtn_proc_apply_to_self(qp);
+-	qtn_proc_free(qp);
+-#endif
++
+ 
+ 	memset(&global, 0, sizeof(struct global_s));
+ 
+@@ -569,10 +538,6 @@
+ 		{
+ 			if ((i + 1) < argc) activate_klog_in = atoi(argv[++i]);
+ 		}
+-		else if (streq(argv[i], "-udp_in"))
+-		{
+-			if ((i + 1) < argc) activate_udp_in = atoi(argv[++i]);
+-		}
+ #endif
+ 		else if (streq(argv[i], "-launchd_in"))
+ 		{
+@@ -621,13 +586,13 @@
+ 
+ 	asldebug("initializing modules\n");
+ 	init_modules();
++	pie_inputs();
+ 
+ #if !TARGET_OS_SIMULATOR
+ 	asldebug("setting up network change notification handler\n");
+ 
+ 	/* network change notification resets UDP and BSD modules */
+ 	notify_register_dispatch(kNotifySCNetworkChange, &network_change_token, global.work_queue, ^(int x){
+-		if (activate_udp_in != 0) udp_in_reset();
+ 		if (activate_bsd_out != 0) bsd_out_reset();
+ 	});
+ #endif
+@@ -705,6 +670,7 @@
+ 	/* go to work */
+ 	asldebug("starting work queue\n");
+ 	dispatch_resume(global.work_queue);
++	pie_ready();
+ 	dispatch_main();
+ 
+ 	/* NOTREACHED */

@@ -1,0 +1,86 @@
+Description: Remove process-lifetime transactions
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-10
+
+--- a/syslogd.tproj/daemon.c
++++ b/syslogd.tproj/daemon.c
+@@ -20,6 +20,24 @@
+  * 
+  * @APPLE_LICENSE_HEADER_END@
+  */
++/* Modified 2026-11-10: Remove process-lifetime transactions (APSL 2.0 section 2.2(b)). */
++/*
++ * This file contains Original Code and/or Modifications of Original Code
++ * as defined in and that are subject to the Apple Public Source License
++ * Version 2.0 (the 'License'). You may not use this file except in
++ * compliance with the License. Please obtain a copy of the License at
++ * http://www.opensource.apple.com/apsl/ and read it before using this
++ * file.
++ * 
++ * The Original Code and all software distributed under the License are
++ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
++ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
++ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
++ * Please see the License for the specific language governing rights and
++ * limitations under the License.
++ *
++ */
+ 
+ #include <TargetConditionals.h>
+ #include <sys/types.h>
+@@ -41,7 +59,7 @@
+ #include <libproc.h>
+ #include <uuid/uuid.h>
+ #include <asl_private.h>
+-#include <os/transaction_private.h>
++
+ 
+ #include "daemon.h"
+ 
+@@ -74,7 +92,7 @@
+ static OSSpinLock count_lock = 0;
+ 
+ #if !(TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR)
+-static os_transaction_t main_transaction;
++
+ #endif
+ 
+ #define DEFAULT_MEMORY_MAX SYSLOGD_WORK_QUEUE_MEMORY
+@@ -324,7 +342,7 @@
+ 	OSSpinLockLock(&count_lock);
+ 
+ #if !(TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR)
+-	if (global.client_count == 0) main_transaction = os_transaction_create("com.apple.syslogd");
++
+ #endif
+ 	global.client_count++;
+ 
+@@ -338,7 +356,7 @@
+ 
+ 	if (global.client_count > 0) global.client_count--;
+ #if !(TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR)
+-	if (global.client_count == 0) os_release(main_transaction);
++
+ #endif
+ 
+ 	OSSpinLockUnlock(&count_lock);
+@@ -942,7 +960,7 @@
+ 		}
+ 	}
+ 
+-	os_transaction_t transaction = os_transaction_create("com.apple.syslogd.message");
++
+ 
+ 	for (x = msg; x != NULL; x = x->next) msize += x->mem_size;
+ 
+@@ -1000,7 +1018,7 @@
+ 		asl_msg_release(msg);
+ 
+ 		OSAtomicDecrement32(&global.work_queue_count);
+-		os_release(transaction);
++
+ 	});
+ }
+ 

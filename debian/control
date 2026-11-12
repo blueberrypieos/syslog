@@ -1,0 +1,17 @@
+Source: syslog
+Section: admin
+Priority: optional
+Maintainer: Maxwell <maxwell@blueberrypieos.com>
+Build-Depends: pietoolchain (>= 0.2.0)
+Standards-Version: 4.7.3
+Homepage: https://github.com/blueberrypieos/syslog
+Vcs-Git: https://github.com/blueberrypieos/syslog.git -b blueberry-pie-os/latest
+Vcs-Browser: https://github.com/blueberrypieos/syslog
+Rules-Requires-Root: no
+
+Package: syslogd
+Architecture: darwin-arm64
+Depends: libsystem, libbsm, libxpc (>= 0-2), zlib
+Description: system logging daemon and ASL tools
+ Receives local and kernel messages and writes the system log.
+ Includes the syslog query tool and log retention manager.
