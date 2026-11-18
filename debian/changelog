@@ -1,3 +1,9 @@
+syslog (406+ds1-3) blueberry-pie-os; urgency=medium
+
+  * Build-Depend on pietoolchain-host and pietoolchain-sdk.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Sun, 15 Nov 2026 08:53:34 +0000
+
 syslog (406+ds1-2) blueberry-pie-os; urgency=medium
 
   * syslogd has Priority important. The base system starts it.
